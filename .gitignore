@@ -1,0 +1,14 @@
+.vscode
+__pycache__
+dist
+build
+
+dbconfig.json
+
+/data/Listed_Stock/*
+/data/OTC_Market/*
+/log/*
+
+!/data/Listed_Stock/.gitkeep
+!/data/OTC_Market/.gitkeep
+!/log/.gitkeep
