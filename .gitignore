@@ -4,6 +4,8 @@ dist
 build
 
 dbconfig.json
+stock_day_all.spec
+stock_day_all.exe
 
 /data/Listed_Stock/*
 /data/OTC_Market/*
