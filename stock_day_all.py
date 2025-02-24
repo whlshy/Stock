@@ -37,5 +37,4 @@ if __name__ == '__main__':
 
         write_log(f'爬取股票資料成功！日期：{date_str}')
     except Exception as e:
-        print(f'Error: {e}')
         write_log(f'Error: {e}')

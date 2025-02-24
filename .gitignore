@@ -9,8 +9,10 @@ stock_day_all.exe
 
 /data/Listed_Stock/*
 /data/OTC_Market/*
+/data/goodinfo/*
 /log/*
 
 !/data/Listed_Stock/.gitkeep
 !/data/OTC_Market/.gitkeep
+!/data/goodinfo/.gitkeep
 !/log/.gitkeep

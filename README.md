@@ -9,3 +9,9 @@ dbconfig.json：
   "password": "password"
 }
 ```
+
+## 打包
+
+```sh
+pyinstaller --onefile stock_day_all.py
+```

@@ -20,6 +20,8 @@ def write_log(log_message):
     log_path = f'{log_file}/{now.strftime('%Y-%m-%d')}_log.txt'
     message = f'{formatted_time} - {log_message}\n'
 
+    print(message)
+
     # 檢查文件是否存在
     if not os.path.exists(log_path):
         create_dir(log_path)
@@ -196,11 +198,14 @@ def get_listed_stock_data(date_str):  # date_str = "YYYYMMDD"
                                     "最後揭示賣量",
                                     "本益比",
                                 ]:
-                                    obj[fields] = (
-                                        float(data[idx].replace(",", ""))
-                                        if data[idx] != "--"
-                                        else None
-                                    )
+                                    try:
+                                        obj[fields] = (
+                                            float(data[idx].replace(",", ""))
+                                            if data[idx] != "--"
+                                            else None
+                                        )
+                                    except:
+                                         obj[fields] = None
                                     continue
                                 if fields == "漲跌(+/-)":
                                     obj[fields] = (
@@ -208,9 +213,12 @@ def get_listed_stock_data(date_str):  # date_str = "YYYYMMDD"
                                     )
                                     continue
                                 obj[fields] = data[idx]
-                            obj["Change"] = float(
-                                obj["漲跌(+/-)"] + str(obj["漲跌價差"])
-                            )
+                            try:
+                                obj["Change"] = float(
+                                    obj["漲跌(+/-)"] + str(obj["漲跌價差"])
+                                )
+                            except:
+                                 obj["Change"] = None
                             listed_arr.append(obj)
 
         # 寫入轉檔後的檔案
@@ -310,6 +318,144 @@ def get_otc_market_data(date_str):  # date_str = "YYYYMMDD"
         
         return otc_arr
 
+# 取得上市個股本益比資料
+def get_listed_pe_data(date_str):
+	year, month, day = get_date_info(date_str)
+	# 如果有檔案則取得資料，沒有檔案則發送API取得資料
+	try:
+		with open(
+			f"./data/Listed_Stock/{year}/{month}/{date_str}_pe_listed.json",
+			"r",
+			encoding="utf-16",
+		) as f:
+			json_data = json.load(f)
+		return json_data
+	except FileNotFoundError:
+		# 如果查詢日期大於今日，則回傳錯誤
+		input_date = datetime.strptime(date_str, "%Y%m%d")
+		today = datetime.today()
+		if input_date > today:
+			raise Exception("查詢日期大於今日，請重新查詢!")
+
+		url = f"https://www.twse.com.tw/rwd/zh/afterTrading/BWIBBU_d?response=json&date={date_str}"
+		res = send_get_request(url)
+		soup = BeautifulSoup(res.content, "html.parser")
+		json_data = json.loads(soup.text)
+
+		# 判斷目錄存不存在，不存在則建立
+		create_dir(f"./data/Listed_Stock/{year}/{month}/{date_str}_pe_listed_origin.json")
+
+		# 寫入檔案
+		with open(
+			f"./data/Listed_Stock/{year}/{month}/{date_str}_pe_listed_origin.json",
+			"w",
+			encoding="utf-16",
+		) as f:
+			json.dump(json_data, f, ensure_ascii=False, indent=2)
+
+		# 轉檔 (只取得上市個股資料)
+		listed_arr = []
+		if "title" in json_data:
+			for data in json_data["data"]:
+				obj = {}
+				for idx, fields in enumerate(json_data["fields"]):
+					if fields in ["公司名稱"]:
+						obj[fields] = data[idx].strip()
+						continue
+					
+					if fields in ["收盤價", "本益比", "每股股利", "殖利率(%)", "股價淨值比"]:
+						try:
+							obj[fields] = float(data[idx].replace(",", ""))
+							continue
+						except ValueError:
+							obj[fields] = None
+						continue
+					obj[fields] = data[idx]
+				listed_arr.append(obj)
+
+		# 寫入轉檔後的檔案
+		with open(
+			f"./data/Listed_Stock/{year}/{month}/{date_str}_pe_listed.json",
+			"w",
+			encoding="utf-16",
+		) as f:
+			json.dump(listed_arr, f, ensure_ascii=False, indent=2)
+
+		return listed_arr
+
+# 取得上櫃個股本益比資料
+def get_otc_pe_data(date_str):  # date_str = "YYYYMMDD"
+	year, month, day = get_date_info(date_str)
+	# 如果有檔案則取得資料，沒有檔案則發送API取得資料
+	try:
+		with open(
+			f"./data/OTC_Market/{year}/{month}/{date_str}_pe_otc.json",
+			"r",
+			encoding="utf-16",
+		) as f:
+			json_data = json.load(f)
+		return json_data
+	except FileNotFoundError:
+		# 如果查詢日期大於今日，則回傳錯誤
+		input_date = datetime.strptime(date_str, "%Y%m%d")
+		today = datetime.today()
+		if input_date > today:
+			raise Exception("查詢日期大於今日，請重新查詢!")
+
+		url = f"https://www.tpex.org.tw/www/zh-tw/afterTrading/peQryDate?date={year}%2F{str(month)}%2F{str(day)}&id=&response=json"
+		res = send_get_request(url)
+		soup = BeautifulSoup(res.content, "html.parser")
+		json_data = json.loads(soup.text)
+
+		# 櫃買的查詢日期如果大於今日，它會顯示最後一天有資料的日期。 如果是假日也會顯示有資料的日期。
+		# 所以要先看它回傳的資料顯示日期是甚麼時候
+		date_str_new = json_data["date"]
+		year, month, day = get_date_info(date_str_new)
+
+		# 判斷目錄存不存在，不存在則建立
+		create_dir(f"./data/OTC_Market/{year}/{month}/{date_str_new}_pe_otc_origin.json")
+
+		# 寫入檔案
+		with open(
+			f"./data/OTC_Market/{year}/{month}/{date_str_new}_pe_otc_origin.json",
+			"w",
+			encoding="utf-16",
+		) as f:
+			json.dump(json_data, f, ensure_ascii=False, indent=2)
+
+		# 轉檔 (只取得上櫃個股資料)
+		otc_arr = []
+		if "tables" in json_data:
+			for item in json_data["tables"]:
+				if "title" in item:
+					if "" in item["title"]:
+						for data in item["data"]:
+							obj = {}
+							for idx, fields in enumerate(item["fields"]):
+								if fields in ["公司名稱"]:
+									obj[fields] = data[idx].strip()
+									continue
+								
+								if fields in ["本益比", "每股股利", "殖利率(%)", "股價淨值比"]:
+									try:
+										obj[fields] = float(data[idx].replace(",", ""))
+										continue
+									except ValueError:
+										obj[fields] = None
+									continue
+								obj[fields] = data[idx]
+							otc_arr.append(obj)
+
+		# 寫入轉檔後的檔案
+		with open(
+			f"./data/OTC_Market/{year}/{month}/{date_str_new}_pe_otc.json",
+			"w",
+			encoding="utf-16",
+		) as f:
+			json.dump(otc_arr, f, ensure_ascii=False, indent=2)
+
+		return otc_arr
+
 # 與資料庫連線
 def connet_to_db():
     with open(r"./dbconfig.json", "r") as f:
@@ -366,6 +512,31 @@ def create_stock_tmp_table(cursor):
     """
     return insert_temp_sql
 
+def create_stock_pe_tmp_table(cursor, insert_data):
+    cursor.execute("drop table if exists #TempDayInfo")
+    cursor.execute(
+        """
+    CREATE TABLE #TempDayInfo (
+        Code NVARCHAR(50),
+        [Name] NVARCHAR(255),
+        [Date] DATE,
+        PE FLOAT,
+        每股股利 FLOAT,
+        股利年度 INT,
+        殖利率 FLOAT,
+        股價淨值比 FLOAT,
+        財報年季 NVARCHAR(50)
+    )
+    """
+    )
+
+    # 構建批量插入臨時表的 SQL 語句
+    insert_temp_sql = """
+    INSERT INTO #TempDayInfo (Code, [Name], [Date], PE, 每股股利, 股利年度, 殖利率, 股價淨值比, 財報年季) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """
+
+    cursor.executemany(insert_temp_sql, insert_data)
+
 # 將臨時表中的資料插入到目標表中，並檢查Code是否存在
 def insert_stock_data(cnxn, cursor):
     merge_sql = """
@@ -404,6 +575,18 @@ def insert_new_stock(cnxn, cursor, market):
     """
 
     cursor.execute(insert_sql)
+
+    # 提交變更
+    cnxn.commit()
+
+def update_otc_pe_data(cnxn, cursor):
+    update_sql = """
+    update DayInfo set PE = T.PE, 每股股利 = T.每股股利, 股利年度 = T.股利年度, 殖利率 = T.殖利率, 股價淨值比 = T.股價淨值比, 財報年季 = T.財報年季
+    from #TempDayInfo T, vd_Stock S
+    where DayInfo.[Date] = T.[Date] and DayInfo.OID = S.OID and S.Code = T.Code and DayInfo.財報年季 is null;
+    """
+
+    cursor.execute(update_sql)
 
     # 提交變更
     cnxn.commit()
@@ -486,7 +669,71 @@ def insert_otc_market_data(date_str):
     # 關閉 DataBase 連線
     close_db_connection(cnxn, cursor)
 
+# 將上市本益比資料寫入資料庫中
+def insert_listed_pe_data(date_str):
+	data = get_listed_pe_data(date_str)
+	if data is None or len(data) == 0:
+		return
+
+	cnxn, cursor = connet_to_db()
+
+	# 將上櫃本益比相關資料寫入臨時表
+	data_to_insert = [
+		(
+			item["證券代號"],  # Code
+			item["證券名稱"],  # Name
+			date_str,  # Date
+			item["本益比"],  # PE 本益比
+			None,  # 每股股利
+			item["股利年度"],  # 股利年度
+			item["殖利率(%)"],  # 殖利率
+			item["股價淨值比"],  # 股價淨值比
+			item["財報年/季"] if "財報年/季" in item else None,  # 財報年季
+		)
+		for item in data
+	]
+	create_stock_pe_tmp_table(cursor, data_to_insert)
+
+	# 更新本益比相關資料進入資料庫
+	update_otc_pe_data(cnxn, cursor)
+
+	# 關閉 DataBase 連線
+	close_db_connection(cnxn, cursor)
+
+# 將上櫃本益比資料寫入資料庫中
+def insert_otc_pe_data(date_str):
+    data = get_otc_pe_data(date_str)
+    if data is None or len(data) == 0:
+        return
+
+    cnxn, cursor = connet_to_db()
+
+    # 將上櫃本益比相關資料寫入臨時表
+    data_to_insert = [
+        (
+            item["股票代號"],  # Code
+            item["公司名稱"],  # Name
+            date_str,  # Date
+            item["本益比"],  # PE 本益比
+            item["每股股利"],  # 每股股利
+            item["股利年度"],  # 股利年度
+            item["殖利率(%)"],  # 殖利率
+            item["股價淨值比"],  # 股價淨值比
+            item["財報年/季"] if "財報年/季" in item else None,  # 財報年季
+        )
+        for item in data
+    ]
+    create_stock_pe_tmp_table(cursor, data_to_insert)
+
+    # 更新本益比相關資料進入資料庫
+    update_otc_pe_data(cnxn, cursor)
+
+    # 關閉 DataBase 連線
+    close_db_connection(cnxn, cursor)
+
 # 將上市/上櫃股票資料寫入資料庫中
 def insert_stock_to_db(date_str):
     insert_listed_stock_data(date_str)
+    insert_listed_pe_data(date_str)
     insert_otc_market_data(date_str)
+    insert_otc_pe_data(date_str)
